@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project.name }} - Rank Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">{{ project.name }}</h1>
+                <p class="text-gray-600 mt-1">{{ project.domain }}</p>
+            </div>
+            <div class="flex space-x-3">
+                <a href="/" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">
+                    ← Dashboard
+                </a>
+                <button onclick="runCheck()" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg">
+                    Run Check
+                </button>
+            </div>
+        </div>
+
+        <!-- Statistiche -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-sm font-medium text-gray-500">Total Keywords</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ keywords|length }}</p>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-sm font-medium text-gray-500">Posizioni Trovate</h3>
+                <p class="text-2xl font-bold text-green-600">{{ results|selectattr('position')|list|length }}</p>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-sm font-medium text-gray-500">Posizione Media</h3>
+                <p class="text-2xl font-bold text-blue-600">
+                    {% set positions = results|selectattr('position')|map(attribute='position')|list %}
+                    {% if positions %}
+                        {{ "%.1f"|format(positions|sum / positions|length) }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </p>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-sm font-medium text-gray-500">Top 10</h3>
+                <p class="text-2xl font-bold text-green-600">
+                    {% set top10_count = 0 %}
+                    {% for result in results %}
+                        {% if result.position and result.position <= 10 %}
+                            {% set top10_count = top10_count + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    {{ top10_count }}
+                </p>
+            </div>
+        </div>
+
+        <!-- Grafico Trend -->
+        <div class="bg-white rounded-lg shadow p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Trend Posizioni (30 giorni)</h2>
+            <div id="trendChart" style="height: 400px;"></div>
+        </div>
+
+        <!-- Sezioni Risultati SERP Modulari -->
+        <div class="space-y-8">
+            <!-- Risultati Organici -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-green-50">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">🌿</span>
+                        <div>
+                            <h2 class="text-xl font-semibold text-green-800">Risultati Organici</h2>
+                            <p class="text-sm text-green-600">Posizioni naturali nei risultati di ricerca</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keyword</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posizione</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Titolo</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% set organic_results = serp_results.get('organic', []) %}
+                            {% for result in organic_results %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ result.keyword }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                        {% if result.position <= 3 %}bg-green-100 text-green-800
+                                        {% elif result.position <= 10 %}bg-yellow-100 text-yellow-800
+                                        {% else %}bg-red-100 text-red-800{% endif %}">
+                                        #{{ result.position }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-blue-600 max-w-xs truncate">
+                                    <a href="{{ result.url }}" target="_blank" class="hover:underline">
+                                        {{ result.url }}
+                                    </a>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                                    {{ result.title or '-' }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if not organic_results %}
+                            <tr>
+                                <td colspan="4" class="px-6 py-8 text-center text-gray-500">
+                                    Nessun risultato organico trovato.
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Annunci Sponsorizzati -->
+            {% set ads_results = serp_results.get('ads', []) %}
+            {% if ads_results %}
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-yellow-50">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">💰</span>
+                        <div>
+                            <h2 class="text-xl font-semibold text-yellow-800">Annunci Sponsorizzati</h2>
+                            <p class="text-sm text-yellow-600">Posizioni negli annunci a pagamento</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keyword</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posizione Ads</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Titolo</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for result in ads_results %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ result.keyword }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        Ads #{{ result.position }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-blue-600 max-w-xs truncate">
+                                    <a href="{{ result.url }}" target="_blank" class="hover:underline">
+                                        {{ result.url }}
+                                    </a>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                                    {{ result.title or '-' }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Featured Snippets -->
+            {% set snippets_results = serp_results.get('featured_snippets', []) %}
+            {% if snippets_results %}
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-purple-50">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">⭐</span>
+                        <div>
+                            <h2 class="text-xl font-semibold text-purple-800">Featured Snippets</h2>
+                            <p class="text-sm text-purple-600">Posizioni in risposta diretta e knowledge panel</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keyword</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Snippet</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for result in snippets_results %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ result.keyword }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                        Featured
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-blue-600 max-w-xs truncate">
+                                    <a href="{{ result.url }}" target="_blank" class="hover:underline">
+                                        {{ result.url }}
+                                    </a>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                                    {{ result.snippet or result.title or '-' }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Local Pack -->
+            {% set local_results = serp_results.get('local_pack', []) %}
+            {% if local_results %}
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-blue-50">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">📍</span>
+                        <div>
+                            <h2 class="text-xl font-semibold text-blue-800">Local Pack</h2>
+                            <p class="text-sm text-blue-600">Posizioni nei risultati locali / mappe</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keyword</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posizione Local</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Titolo</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for result in local_results %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ result.keyword }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        Local #{{ result.position }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-blue-600 max-w-xs truncate">
+                                    <a href="{{ result.url }}" target="_blank" class="hover:underline">
+                                        {{ result.url }}
+                                    </a>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                                    {{ result.title or '-' }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Shopping Results -->
+            {% set shopping_results = serp_results.get('shopping', []) %}
+            {% if shopping_results %}
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-orange-50">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">🛍️</span>
+                        <div>
+                            <h2 class="text-xl font-semibold text-orange-800">Shopping Results</h2>
+                            <p class="text-sm text-orange-600">Posizioni nei risultati prodotti/shopping</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keyword</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posizione Shopping</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prodotto</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for result in shopping_results %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ result.keyword }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                        Shop #{{ result.position }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-blue-600 max-w-xs truncate">
+                                    <a href="{{ result.url }}" target="_blank" class="hover:underline">
+                                        {{ result.url }}
+                                    </a>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                                    {{ result.title or '-' }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Messaggio se nessun risultato -->
+            {% if not serp_results or (not serp_results.get('organic') and not serp_results.get('ads') and not serp_results.get('featured_snippets') and not serp_results.get('local_pack') and not serp_results.get('shopping')) %}
+            <div class="bg-white rounded-lg shadow p-8 text-center">
+                <span class="text-6xl mb-4 block">🔍</span>
+                <h3 class="text-xl font-semibold text-gray-800 mb-2">Nessun risultato disponibile</h3>
+                <p class="text-gray-600 mb-4">Esegui il primo controllo per vedere le posizioni del tuo dominio.</p>
+                <button onclick="runCheck()" class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg">
+                    Avvia Primo Check
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        // Carica dati trend
+        async function loadTrendData() {
+            try {
+                const response = await fetch(`/api/results/{{ project.id }}?days=30`);
+                const data = await response.json();
+                
+                // Raggruppa per keyword
+                const keywordData = {};
+                data.forEach(item => {
+                    if (!keywordData[item.keyword]) {
+                        keywordData[item.keyword] = [];
+                    }
+                    keywordData[item.keyword].push({
+                        x: item.checked_at,
+                        y: item.position || null
+                    });
+                });
+                
+                // Crea traces per Plotly (mostra solo top 10 keywords per performance)
+                const traces = Object.keys(keywordData).slice(0, 10).map(keyword => ({
+                    x: keywordData[keyword].map(d => d.x),
+                    y: keywordData[keyword].map(d => d.y),
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: keyword,
+                    connectgaps: false
+                }));
+                
+                const layout = {
+                    title: 'Trend Posizioni Keywords (Top 10)',
+                    xaxis: { title: 'Data' },
+                    yaxis: { 
+                        title: 'Posizione',
+                        autorange: 'reversed',
+                        dtick: 10
+                    },
+                    hovermode: 'closest'
+                };
+                
+                Plotly.newPlot('trendChart', traces, layout, {responsive: true});
+                
+            } catch (error) {
+                document.getElementById('trendChart').innerHTML = '<p class="text-center text-gray-500 py-8">Errore nel caricamento dei dati trend</p>';
+            }
+        }
+        
+        async function runCheck() {
+            if (confirm('Avviare il controllo manuale delle posizioni?')) {
+                try {
+                    const response = await fetch(`/run_check/{{ project.id }}`, { method: 'POST' });
+                    const data = await response.json();
+                    if (data.status === 'started') {
+                        alert('Controllo avviato in background. Aggiorna la pagina tra qualche minuto per vedere i risultati.');
+                    }
+                } catch (error) {
+                    alert('Errore durante l\'avvio del controllo');
+                }
+            }
+        }
+        
+        // Carica trend all'avvio
+        document.addEventListener('DOMContentLoaded', loadTrendData);
+    </script>
+</body>
+</html>

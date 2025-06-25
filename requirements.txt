@@ -1,0 +1,15 @@
+crawl4ai
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+jinja2
+python-multipart
+aiofiles
+apscheduler
+pandas>=2.2.0
+plotly
+python-dotenv
+httpx
+fake-useragent
+pyopenssl

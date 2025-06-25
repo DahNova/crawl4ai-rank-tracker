@@ -1,0 +1,70 @@
+# Python bytecode / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.env/
+.venv/
+virtualenv/
+
+# Database files
+*.db
+*.sqlite3
+*.sqlite
+rank_tracker.db
+
+# Debug files
+debug_*.html
+*.log
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.spyderproject
+.spyproject
+.ropeproject
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific temporary files
+*.bak
+*.tmp
+*.temp
+
+# Configuration with potential sensitive info
+.env
+config.ini
+secrets.json
+credentials.json
